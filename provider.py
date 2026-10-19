@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import requests
 from transliterate import translit
 
@@ -8,24 +9,39 @@ OUTPUT_FILE = "rutv2.m3u"
 
 
 def fetch_playlist() -> str:
-    r = requests.get(
+    response = requests.get(
         SOURCE_URL,
         timeout=30,
-        headers={"User-Agent": "Mozilla/5.0"},
+        headers={"User-Agent": "Mozilla/5.0"}
     )
-    r.raise_for_status()
-    return r.text
+    response.raise_for_status()
+    return response.text
 
 
-def translate_name(name: str) -> str:
+def transliterate_text(text: str) -> str:
     try:
-        return translit(name, "ru", reversed=True)
+        return translit(text, "ru", reversed=True)
     except Exception:
-        return name
+        return text
+
+
+def clean_extinf(line: str) -> str:
+    # Remove metadata
+    line = re.sub(r'\s*group-title="[^"]*"', "", line)
+    line = re.sub(r'\s*tvg-id="[^"]*"', "", line)
+    line = re.sub(r'\s*tvg-name="[^"]*"', "", line)
+
+    # Transliterate channel name
+    if "," in line:
+        prefix, channel_name = line.rsplit(",", 1)
+        channel_name = transliterate_text(channel_name.strip())
+        line = f"{prefix},{channel_name}"
+
+    return line
 
 
 def clean_playlist(content: str) -> str:
-    output = []
+    result = ["#EXTM3U"]
 
     for line in content.splitlines():
         line = line.strip()
@@ -33,20 +49,24 @@ def clean_playlist(content: str) -> str:
         if not line:
             continue
 
-        if line.startswith("#EXTINF") and "," in line:
-            prefix, channel_name = line.split(",", 1)
-            line = f"{prefix},{translate_name(channel_name)}"
+        # Replace source header
+        if line.startswith("#EXTM3U"):
+            continue
 
-        output.append(line)
+        if line.startswith("#EXTINF"):
+            line = clean_extinf(line)
 
-    return "\n".join(output) + "\n"
+        result.append(line)
+
+    return "\n".join(result) + "\n"
 
 
 def main():
     playlist = fetch_playlist()
+    cleaned = clean_playlist(playlist)
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        f.write(clean_playlist(playlist))
+    with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as fp:
+        fp.write(cleaned)
 
     print(f"Saved: {OUTPUT_FILE}")
 
