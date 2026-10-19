@@ -17,7 +17,7 @@ def fetch_playlist() -> str:
 
 
 def clean_playlist(content: str) -> str:
-    lines = []
+    lines = ["#EXTM3U"]  # Clean header
 
     for line in content.splitlines():
         line = line.strip()
@@ -25,18 +25,19 @@ def clean_playlist(content: str) -> str:
         if not line:
             continue
 
+        # Skip original header completely
+        if line.startswith("#EXTM3U"):
+            continue
+
+        # Remove all EXTINF attributes
         if line.startswith("#EXTINF"):
-            # Keep only channel name, remove all attributes
             if "," in line:
                 channel_name = line.split(",", 1)[1].strip()
                 line = f"#EXTINF:-1,{channel_name}"
             else:
-                line = "#EXTINF:-1"
+                continue
 
         lines.append(line)
-
-    if not lines or not lines[0].startswith("#EXTM3U"):
-        lines.insert(0, "#EXTM3U")
 
     return "\n".join(lines) + "\n"
 
