@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import requests
+from transliterate import translit
 
 SOURCE_URL = "https://raw.githubusercontent.com/Rafail1082GitHUB/rafail1982.ru/main/RUTUBE.m3u8"
 OUTPUT_FILE = "rutv2.m3u"
@@ -16,8 +17,16 @@ def fetch_playlist() -> str:
     return r.text
 
 
+def translate_name(name: str) -> str:
+    try:
+        # Russian -> Latin transliteration
+        return translit(name, "ru", reversed=True)
+    except Exception:
+        return name
+
+
 def clean_playlist(content: str) -> str:
-    lines = ["#EXTM3U"]  # Clean header
+    lines = ["#EXTM3U"]
 
     for line in content.splitlines():
         line = line.strip()
@@ -25,17 +34,17 @@ def clean_playlist(content: str) -> str:
         if not line:
             continue
 
-        # Skip original header completely
         if line.startswith("#EXTM3U"):
             continue
 
-        # Remove all EXTINF attributes
         if line.startswith("#EXTINF"):
-            if "," in line:
-                channel_name = line.split(",", 1)[1].strip()
-                line = f"#EXTINF:-1,{channel_name}"
-            else:
+            if "," not in line:
                 continue
+
+            channel_name = line.split(",", 1)[1].strip()
+            channel_name = translate_name(channel_name)
+
+            line = f"#EXTINF:-1,{channel_name}"
 
         lines.append(line)
 
