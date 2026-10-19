@@ -1,60 +1,56 @@
-name: Update Playlist
+#!/usr/bin/env python3
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
+import requests
+from transliterate import translit
 
-permissions:
-  contents: write
+SOURCE_URL = "https://raw.githubusercontent.com/Rafail1082GitHUB/rafail1982.ru/main/RUTUBE.m3u8"
+OUTPUT_FILE = "rutv2.m3u"
 
-concurrency:
-  group: update-playlist
-  cancel-in-progress: false
 
-jobs:
-  update:
-    runs-on: ubuntu-latest
+def fetch_playlist() -> str:
+    r = requests.get(
+        SOURCE_URL,
+        timeout=30,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    r.raise_for_status()
+    return r.text
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.txt
+def translate_name(name: str) -> str:
+    try:
+        return translit(name, "ru", reversed=True)
+    except Exception:
+        return name
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
-      - name: Generate playlist
-        run: python provider.py
+def clean_playlist(content: str) -> str:
+    output = []
 
-      - name: Check for changes
-        id: changes
-        run: |
-          git add rutv2.m3u
+    for line in content.splitlines():
+        line = line.strip()
 
-          if git diff --cached --quiet; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+        if not line:
+            continue
 
-      - name: Commit changes
-        if: steps.changes.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if line.startswith("#EXTINF") and "," in line:
+            prefix, channel_name = line.split(",", 1)
+            line = f"{prefix},{translate_name(channel_name)}"
 
-          git commit -m "Update playlist $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push
+        output.append(line)
 
-      - name: No changes
-        if: steps.changes.outputs.changed == 'false'
-        run: echo "Playlist already up to date"
+    return "\n".join(output) + "\n"
+
+
+def main():
+    playlist = fetch_playlist()
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        f.write(clean_playlist(playlist))
+
+    print(f"Saved: {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    main()
+``
