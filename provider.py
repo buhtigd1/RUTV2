@@ -6,7 +6,7 @@ SOURCE_URL = "https://raw.githubusercontent.com/Rafail1082GitHUB/rafail1982.ru/m
 OUTPUT_FILE = "rutv2.m3u"
 
 
-def fetch_playlist():
+def fetch_playlist() -> str:
     r = requests.get(
         SOURCE_URL,
         timeout=30,
@@ -24,6 +24,14 @@ def clean_playlist(content: str) -> str:
 
         if not line:
             continue
+
+        if line.startswith("#EXTINF"):
+            # Keep only channel name, remove all attributes
+            if "," in line:
+                channel_name = line.split(",", 1)[1].strip()
+                line = f"#EXTINF:-1,{channel_name}"
+            else:
+                line = "#EXTINF:-1"
 
         lines.append(line)
 
